@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Leitor de código Pix</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --tinta:#0D2A2B;
+  --tinta-70:rgba(13,42,43,.66);
+  --tinta-40:rgba(13,42,43,.38);
+  --papel:#E4EAE5;
+  --carta:#FDFDFB;
+  --pix:#00A98F;
+  --pix-esc:#00806D;
+  --falha:#B3401A;
+  --falha-bg:#FCEFE9;
+  --aviso-bg:#FFF7E8;
+  --aviso-borda:#EFC578;
+  --linha:rgba(13,42,43,.14);
+  --seg-a:rgba(0,169,143,.16);
+  --seg-b:rgba(13,42,43,.08);
+  --display:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;
+  --corpo:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--papel);color:var(--tinta);font-family:var(--corpo);font-size:15px;line-height:1.5;padding:28px 20px 64px}
+.envelope{max-width:1000px;margin:0 auto}
+
+.topo{border-bottom:1px solid var(--linha);padding-bottom:22px;margin-bottom:28px}
+.sobrancelha{font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--pix-esc);display:flex;align-items:center;gap:9px;margin:0 0 10px}
+.losango{width:9px;height:9px;background:var(--pix);transform:rotate(45deg);border-radius:1.5px;flex:none}
+h1{font-family:var(--display);font-weight:800;font-size:clamp(30px,6.2vw,50px);line-height:.98;letter-spacing:-.025em;margin:0 0 10px}
+.linhafina{margin:0;max-width:56ch;color:var(--tinta-70)}
+
+/* ---------- entrada ---------- */
+.abas{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.abas button{
+  font:inherit;font-size:13px;font-weight:500;cursor:pointer;
+  padding:7px 14px;border:1px solid var(--linha);border-radius:999px;
+  background:transparent;color:var(--tinta-70);transition:all .15s
+}
+.abas button:hover{border-color:var(--pix)}
+.abas button[aria-selected=true]{background:var(--tinta);border-color:var(--tinta);color:var(--carta)}
+.abas button:focus-visible{outline:2px solid var(--pix);outline-offset:2px}
+.painel{display:none}
+.painel.ativo{display:block}
+
+textarea{
+  width:100%;min-height:112px;resize:vertical;font-family:var(--mono);font-size:13px;
+  line-height:1.6;color:var(--tinta);background:var(--carta);border:1px solid var(--linha);
+  border-radius:5px;padding:12px 13px
+}
+textarea:focus{outline:none;border-color:var(--pix);box-shadow:0 0 0 3px rgba(0,169,143,.18)}
+textarea::placeholder{color:var(--tinta-40)}
+
+.solta{
+  border:1.5px dashed var(--linha);border-radius:6px;background:var(--carta);
+  padding:34px 20px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s
+}
+.solta:hover,.solta.pairando{border-color:var(--pix);background:#fff}
+.solta p{margin:0;font-size:14px;color:var(--tinta-70)}
+.solta strong{display:block;font-weight:600;color:var(--tinta);margin-bottom:4px;font-size:15px}
+#arquivo{display:none}
+
+.camera-caixa{background:#000;border-radius:6px;overflow:hidden;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center}
+.camera-caixa video{width:100%;height:100%;object-fit:cover;display:block}
+.camera-off{color:rgba(255,255,255,.55);font-size:13.5px;padding:20px;text-align:center}
+
+.botao{font:inherit;font-weight:600;font-size:14px;cursor:pointer;border-radius:5px;padding:10px 16px;border:1px solid transparent;transition:background .15s,color .15s,opacity .15s}
+.botao.forte{background:var(--pix);color:#fff}
+.botao.forte:hover{background:var(--pix-esc)}
+.botao.leve{background:transparent;border-color:var(--linha);color:var(--tinta)}
+.botao.leve:hover{border-color:var(--tinta)}
+.botao:disabled{opacity:.4;cursor:not-allowed}
+.acoes{display:flex;gap:9px;margin-top:12px;flex-wrap:wrap}
+
+.recado{display:none;margin-top:12px;font-size:13.5px;font-weight:500;padding:11px 13px;border-radius:5px}
+.recado.ativo{display:block}
+.recado.ruim{background:var(--falha-bg);color:var(--falha)}
+.recado.neutro{background:var(--aviso-bg);border:1px solid var(--aviso-borda)}
+
+/* ---------- resultado ---------- */
+.resultado{display:none;margin-top:34px}
+.resultado.ativo{display:block}
+
+.veredito{
+  display:flex;align-items:flex-start;gap:14px;padding:18px 20px;border-radius:6px;margin-bottom:26px;
+  background:var(--carta);border-left:4px solid var(--pix)
+}
+.veredito.ruim{border-left-color:var(--falha);background:var(--falha-bg)}
+.veredito .marca{font-family:var(--display);font-size:26px;font-weight:800;line-height:1;color:var(--pix);flex:none;margin-top:1px}
+.veredito.ruim .marca{color:var(--falha)}
+.veredito h2{font-family:var(--display);font-size:19px;font-weight:700;letter-spacing:-.015em;margin:0 0 3px}
+.veredito p{margin:0;font-size:13.5px;color:var(--tinta-70)}
+.veredito.ruim p{color:var(--falha)}
+
+.resumo{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:1px;background:var(--linha);border:1px solid var(--linha);border-radius:6px;overflow:hidden;margin-bottom:28px}
+.dado{background:var(--carta);padding:14px 16px}
+.dado dt{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--tinta-40);margin-bottom:5px}
+.dado dd{margin:0;font-size:15px;font-weight:600;word-break:break-word}
+.dado dd.grande{font-family:var(--display);font-size:24px;font-weight:800;letter-spacing:-.02em}
+.dado dd.mono{font-family:var(--mono);font-size:12.5px;font-weight:500;line-height:1.45}
+.dado dd.fraco{font-weight:400;color:var(--tinta-70);font-size:14px}
+
+.secao{font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--tinta-40);margin:0 0 12px}
+
+/* faixa do payload */
+.faixa{font-family:var(--mono);font-size:12.5px;line-height:2;word-break:break-all;background:var(--carta);border:1px solid var(--linha);border-radius:6px;padding:14px 15px;margin-bottom:28px}
+.seg{padding:3px 0;border-radius:2px;cursor:default;transition:background .12s,color .12s}
+.seg.a{background:var(--seg-a)}
+.seg.b{background:var(--seg-b)}
+.seg.crc{background:rgba(0,169,143,.34)}
+.seg.aceso{background:var(--tinta);color:var(--carta)}
+.seg.quebrado{background:var(--falha);color:#fff}
+
+table{width:100%;border-collapse:collapse;font-size:13.5px;margin-bottom:28px}
+thead th{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--tinta-40);text-align:left;font-weight:500;padding:0 10px 8px 0;border-bottom:1px solid var(--linha)}
+tbody td{padding:9px 10px 9px 0;border-bottom:1px solid var(--linha);vertical-align:top}
+tbody tr{transition:background .12s}
+tbody tr.aceso{background:var(--carta)}
+tbody tr.filho td:first-child{padding-left:22px;color:var(--tinta-40)}
+td.id{font-family:var(--mono);font-weight:700;color:var(--pix-esc);width:46px;white-space:nowrap}
+td.valor{font-family:var(--mono);color:var(--tinta-70);word-break:break-all}
+
+/* pagamento */
+.pagamento{background:var(--carta);border:1px solid var(--linha);border-radius:6px;padding:22px 24px}
+.pagamento h2{font-family:var(--display);font-size:22px;font-weight:800;letter-spacing:-.02em;margin:0 0 4px}
+.pagamento .curto{font-size:15px;font-weight:600;color:var(--falha);margin:0 0 14px}
+.pagamento p{margin:0 0 12px;font-size:14px;color:var(--tinta-70)}
+.pagamento p:last-child{margin-bottom:0}
+.pagamento code{font-family:var(--mono);font-size:12.5px;background:var(--papel);padding:1.5px 5px;border-radius:3px;color:var(--tinta)}
+.passos{margin:0 0 12px;padding-left:20px;font-size:14px;color:var(--tinta-70)}
+.passos li{margin-bottom:6px}
+.passos strong{color:var(--tinta);font-weight:600}
+
+.nota{margin-top:30px;padding-top:18px;border-top:1px solid var(--linha);font-size:12.5px;color:var(--tinta-70);max-width:66ch}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="envelope">
+
+  <header class="topo">
+    <p class="sobrancelha"><span class="losango"></span>BR Code · leitura e conferência</p>
+    <h1>Leitor de código Pix</h1>
+    <p class="linhafina">Cole um copia e cola ou solte a imagem de um QR. O código é aberto campo a campo aqui no navegador, sem sair do seu computador.</p>
+  </header>
+
+  <!-- ============ ENTRADA ============ -->
+  <div class="abas" role="tablist">
+    <button role="tab" id="aba-texto" aria-selected="true" aria-controls="p-texto">Colar código</button>
+    <button role="tab" id="aba-imagem" aria-selected="false" aria-controls="p-imagem">Imagem do QR</button>
+    <button role="tab" id="aba-camera" aria-selected="false" aria-controls="p-camera">Câmera</button>
+  </div>
+
+  <div class="painel ativo" id="p-texto" role="tabpanel" aria-labelledby="aba-texto">
+    <textarea id="entrada" spellcheck="false" placeholder="00020126360014br.gov.bcb.pix01..."></textarea>
+    <div class="acoes">
+      <button class="botao forte" id="btn-ler">Ler código</button>
+      <button class="botao leve" id="btn-exemplo">Usar um exemplo</button>
+      <button class="botao leve" id="btn-limpar">Limpar</button>
+    </div>
+  </div>
+
+  <div class="painel" id="p-imagem" role="tabpanel" aria-labelledby="aba-imagem">
+    <div class="solta" id="solta" tabindex="0" role="button">
+      <p><strong>Solte a imagem do QR aqui</strong>ou clique para escolher um arquivo. Também dá pra colar com Ctrl+V.</p>
+    </div>
+    <input type="file" id="arquivo" accept="image/*">
+  </div>
+
+  <div class="painel" id="p-camera" role="tabpanel" aria-labelledby="aba-camera">
+    <div class="camera-caixa" id="camera-caixa">
+      <p class="camera-off" id="camera-off">A câmera fica desligada até você permitir.</p>
+      <video id="video" playsinline muted style="display:none"></video>
+    </div>
+    <div class="acoes">
+      <button class="botao forte" id="btn-camera">Ligar câmera</button>
+      <button class="botao leve" id="btn-parar" disabled>Parar</button>
+    </div>
+  </div>
+
+  <p class="recado" id="recado"></p>
+
+  <!-- ============ RESULTADO ============ -->
+  <div class="resultado" id="resultado">
+
+    <div class="veredito" id="veredito">
+      <span class="marca" id="veredito-marca">✓</span>
+      <div>
+        <h2 id="veredito-titulo"></h2>
+        <p id="veredito-texto"></p>
+      </div>
+    </div>
+
+    <dl class="resumo" id="resumo"></dl>
+
+    <p class="secao">O código, campo a campo</p>
+    <div class="faixa" id="faixa"></div>
+
+    <table>
+      <thead><tr><th>ID</th><th>Campo</th><th>Conteúdo</th></tr></thead>
+      <tbody id="tabela"></tbody>
+    </table>
+
+    <div class="pagamento" id="pagamento"></div>
+  </div>
+
+  <p class="nota">Nada é enviado para nenhum servidor: a leitura, a checagem do CRC e a decodificação da imagem acontecem no seu navegador.</p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  /* ================= núcleo ================= */
+  function crc16(str){
+    var crc=0xFFFF;
+    for(var i=0;i<str.length;i++){
+      crc^=str.charCodeAt(i)<<8;
+      for(var j=0;j<8;j++) crc=(crc&0x8000)?((crc<<1)^0x1021)&0xFFFF:(crc<<1)&0xFFFF;
+    }
+    return crc.toString(16).toUpperCase().padStart(4,'0');
+  }
+
+  function varrer(s, base){
+    base = base || 0;
+    var campos=[], i=0;
+    while(i<s.length){
+      if(i+4>s.length) return {erro:'Sobrou "'+s.slice(i)+'" solto no fim do código.', campos:campos};
+      var id=s.substr(i,2), lenTxt=s.substr(i+2,2), len=parseInt(lenTxt,10);
+      if(!/^\d{2}$/.test(id)||!/^\d{2}$/.test(lenTxt)||isNaN(len))
+        return {erro:'Campo malformado na posição '+(base+i)+'. Esperava dois dígitos de ID e dois de tamanho.', campos:campos};
+      var val=s.substr(i+4,len);
+      if(val.length!==len)
+        return {erro:'O campo '+id+' declara '+len+' caracteres, mas só há '+val.length+'.', campos:campos};
+      campos.push({id:id, val:val, ini:base+i, fim:base+i+4+len});
+      i+=4+len;
+    }
+    return {campos:campos};
+  }
+
+  var NOMES={
+    '00':'Versão do padrão','01':'Modo de iniciação','52':'Categoria do recebedor',
+    '53':'Moeda','54':'Valor','55':'Indicador de gorjeta','56':'Gorjeta fixa','57':'Gorjeta percentual',
+    '58':'País','59':'Nome do recebedor','60':'Cidade','61':'CEP',
+    '62':'Dados adicionais','64':'Idioma alternativo','63':'Checksum (CRC16)'
+  };
+  var NOMES26={'00':'Domínio do arranjo','01':'Chave Pix','02':'Descrição','03':'Descrição','25':'URL da cobrança dinâmica'};
+  var NOMES62={'01':'Número da fatura','02':'Celular','03':'Loja','04':'Fidelidade','05':'Identificador (txid)',
+               '06':'Cliente','07':'Terminal','08':'Finalidade','09':'Dado extra pedido ao pagador'};
+
+  function nomeCampo(id){
+    if(NOMES[id]) return NOMES[id];
+    var n=parseInt(id,10);
+    if(n>=26&&n<=51) return 'Arranjo de pagamento';
+    if(n>=80&&n<=99) return 'Campo reservado';
+    return 'Campo '+id;
+  }
+  function ehComposto(id){
+    var n=parseInt(id,10);
+    return (n>=26&&n<=51)||id==='62'||id==='64'||(n>=80&&n<=99);
+  }
+  function nomeFilho(pai, id){
+    if(parseInt(pai,10)>=26&&parseInt(pai,10)<=51) return NOMES26[id]||('Subcampo '+id);
+    if(pai==='62') return NOMES62[id]||('Subcampo '+id);
+    return 'Subcampo '+id;
+  }
+
+  function tipoChave(k){
+    if(!k) return '';
+    if(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k)) return 'Chave aleatória';
+    if(k.indexOf('@')>-1) return 'E-mail';
+    if(k.charAt(0)==='+') return 'Celular';
+    if(/^\d{11}$/.test(k)) return 'CPF';
+    if(/^\d{14}$/.test(k)) return 'CNPJ';
+    return 'Chave';
+  }
+  function moeda(t){
+    var n=parseFloat(t);
+    if(isNaN(n)) return t;
+    return 'R$ '+n.toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+  }
+
+  /* ================= elementos ================= */
+  var $=function(id){return document.getElementById(id);};
+  var elEntrada=$('entrada'), elRecado=$('recado'), elResultado=$('resultado'),
+      elVeredito=$('veredito'), elVMarca=$('veredito-marca'), elVTitulo=$('veredito-titulo'),
+      elVTexto=$('veredito-texto'), elResumo=$('resumo'), elFaixa=$('faixa'),
+      elTabela=$('tabela'), elPagamento=$('pagamento');
+
+  function recado(msg, tom){
+    elRecado.textContent = msg||'';
+    elRecado.className = 'recado' + (msg?(' ativo '+(tom||'neutro')):'');
+  }
+
+  /* ================= análise ================= */
+  function analisar(bruto){
+    var s = (bruto||'').replace(/\s+/g,'').trim();
+    if(!s){ elResultado.classList.remove('ativo'); recado('Cole um código Pix ou leia um QR para começar.','neutro'); return; }
+    if(s.slice(0,4)!=='0002'){
+      elResultado.classList.remove('ativo');
+      recado('Isso não parece um código Pix. Todo BR Code começa com 0002.','ruim');
+      return;
+    }
+    var r = varrer(s);
+    if(r.erro){
+      elResultado.classList.remove('ativo');
+      recado(r.erro,'ruim');
+      return;
+    }
+    recado('');
+
+    var campos = r.campos;
+    var crcCampo = null, idx = {};
+    campos.forEach(function(c){ idx[c.id]=c; if(c.id==='63') crcCampo=c; });
+
+    // ---- CRC ----
+    var crcOk=false, crcEsperado='';
+    if(crcCampo){
+      crcEsperado = crc16(s.slice(0, crcCampo.ini+4));
+      crcOk = crcEsperado.toUpperCase() === crcCampo.val.toUpperCase();
+    }
+
+    // ---- campo 26 (chave) ----
+    var chave='', urlDin='', descricao='';
+    for(var n=26;n<=51;n++){
+      var k = String(n).padStart(2,'0');
+      if(idx[k]){
+        var sub = varrer(idx[k].val).campos;
+        sub.forEach(function(sc){
+          if(sc.id==='01'&&!chave) chave=sc.val;
+          if(sc.id==='25'&&!urlDin) urlDin=sc.val;
+          if((sc.id==='02'||sc.id==='03')&&!descricao) descricao=sc.val;
+        });
+      }
+    }
+    var txid='';
+    if(idx['62']) varrer(idx['62'].val).campos.forEach(function(sc){ if(sc.id==='05') txid=sc.val; });
+
+    var valor = idx['54']?idx['54'].val:'';
+    var unico = idx['01'] && idx['01'].val==='12';
+    var dinamico = !!urlDin;
+
+    // ---- veredito ----
+    elVeredito.classList.toggle('ruim', !crcOk);
+    elVMarca.textContent = crcOk ? '✓' : '✗';
+    if(crcOk){
+      elVTitulo.textContent = 'Código íntegro';
+      elVTexto.textContent = 'O checksum confere: o conteúdo não foi alterado desde que foi gerado.';
+    } else {
+      elVTitulo.textContent = 'Checksum não confere';
+      elVTexto.textContent = crcCampo
+        ? 'O código traz ' + crcCampo.val + ' mas o cálculo dá ' + crcEsperado + '. Ele foi cortado, alterado ou copiado pela metade — o app do banco vai recusar.'
+        : 'Não há campo 63 (checksum). O código está incompleto.';
+    }
+
+    // ---- resumo ----
+    var itens=[];
+    itens.push(['Valor', valor?moeda(valor):'Livre', valor?'grande':'fraco']);
+    itens.push(['Recebedor', idx['59']?idx['59'].val:'—','']);
+    itens.push(['Cidade', idx['60']?idx['60'].val:'—','']);
+    itens.push([tipoChave(chave)||'Chave', chave||(dinamico?'só no servidor':'—'), 'mono']);
+    itens.push(['Tipo', dinamico?'Cobrança dinâmica':'QR estático','']);
+    itens.push(['Uso', unico?'Uso único':'Reutilizável','']);
+    if(txid) itens.push(['Identificador', txid,'mono']);
+    if(descricao) itens.push(['Descrição', descricao,'fraco']);
+
+    elResumo.innerHTML='';
+    itens.forEach(function(it){
+      var d=document.createElement('div'); d.className='dado';
+      var dt=document.createElement('dt'); dt.textContent=it[0];
+      var dd=document.createElement('dd'); dd.textContent=it[1]; if(it[2]) dd.className=it[2];
+      d.appendChild(dt); d.appendChild(dd); elResumo.appendChild(d);
+    });
+
+    // ---- faixa colorida + tabela ----
+    elFaixa.innerHTML=''; elTabela.innerHTML='';
+    campos.forEach(function(c, i){
+      var sp=document.createElement('span');
+      sp.className='seg '+(c.id==='63'?(crcOk?'crc':'quebrado'):(i%2?'b':'a'));
+      sp.textContent=s.slice(c.ini,c.fim);
+      sp.dataset.ref='f'+i;
+      sp.title=nomeCampo(c.id);
+      elFaixa.appendChild(sp);
+
+      var tr=document.createElement('tr');
+      tr.dataset.ref='f'+i;
+      var t1=document.createElement('td'); t1.className='id'; t1.textContent=c.id;
+      var t2=document.createElement('td'); t2.textContent=nomeCampo(c.id);
+      var t3=document.createElement('td'); t3.className='valor';
+      t3.textContent = (c.id==='54')?moeda(c.val):(c.id==='53'&&c.val==='986')?'986 (real)':c.val;
+      tr.appendChild(t1); tr.appendChild(t2); tr.appendChild(t3);
+      elTabela.appendChild(tr);
+
+      if(ehComposto(c.id)){
+        var sub=varrer(c.val);
+        sub.campos.forEach(function(sc){
+          var f=document.createElement('tr'); f.className='filho';
+          var a=document.createElement('td'); a.className='id'; a.textContent=sc.id;
+          var b=document.createElement('td'); b.textContent=nomeFilho(c.id, sc.id);
+          var d2=document.createElement('td'); d2.className='valor'; d2.textContent=sc.val;
+          f.appendChild(a); f.appendChild(b); f.appendChild(d2);
+          elTabela.appendChild(f);
+        });
+      }
+    });
+
+    ligarRealce();
+    montarPagamento(dinamico, urlDin, txid, chave);
+    elResultado.classList.add('ativo');
+  }
+
+  function ligarRealce(){
+    function acender(ref, on){
+      Array.prototype.forEach.call(document.querySelectorAll('[data-ref="'+ref+'"]'), function(el){
+        el.classList.toggle('aceso', on);
+      });
+    }
+    Array.prototype.forEach.call(document.querySelectorAll('[data-ref]'), function(el){
+      el.addEventListener('mouseenter', function(){ acender(el.dataset.ref, true); });
+      el.addEventListener('mouseleave', function(){ acender(el.dataset.ref, false); });
+    });
+  }
+
+  /* ================= painel de pagamento ================= */
+  function montarPagamento(dinamico, url, txid, chave){
+    elPagamento.innerHTML='';
+    var h=document.createElement('h2'); h.textContent='Este Pix foi pago?';
+    var curto=document.createElement('p'); curto.className='curto';
+    elPagamento.appendChild(h); elPagamento.appendChild(curto);
+
+    function p(html){ var e=document.createElement('p'); e.innerHTML=html; elPagamento.appendChild(e); return e; }
+
+    if(!dinamico){
+      curto.textContent='Não dá para saber por este código.';
+      p('Um QR estático é só um texto com a chave dentro. Ele não guarda estado nenhum: não sabe quantas vezes foi pago, nem se foi. O mesmo código pode ser pago cem vezes ou nenhuma, e o texto continua idêntico.');
+      p('Quem consegue verificar é só o dono da conta que recebe, olhando o extrato ou usando a <strong>API Pix</strong> do próprio banco — a consulta é por conta, não por código.' + (txid?' O identificador <code>'+escapar(txid)+'</code> ajuda a achar a transação no extrato, mas ele é só um rótulo: quem paga pode até ignorá-lo em alguns casos.':''));
+      p('Se você precisa saber se cada cobrança foi paga, o caminho é gerar <strong>cobranças dinâmicas</strong> pela API do seu PSP, uma por venda, com txid único.');
+    } else {
+      curto.textContent='Só o dono da conta consegue consultar.';
+      p('Esta é uma <strong>cobrança dinâmica</strong>: o QR aponta para <code>'+escapar(url)+'</code>, no servidor do banco. É lá que ficam o valor, o vencimento e o status.');
+      p('Esse endereço não é público. Buscá-lo exige autenticação com <strong>certificado mTLS</strong> emitido pelo seu PSP, e só devolve dados para a conta dona da cobrança. Por isso a consulta não pode acontecer numa página como esta: as credenciais ficariam expostas para qualquer pessoa que abrisse o arquivo.');
+      var ol=document.createElement('ol'); ol.className='passos';
+      [
+        '<strong>Servidor seu</strong>, guardando o certificado e o client_id/secret fora do navegador.',
+        'Token via <code>POST /oauth/token</code> no PSP.',
+        'Status via <code>GET /cob/'+escapar(txid||'{txid}')+'</code> — devolve <code>ATIVA</code>, <code>CONCLUIDA</code> ou <code>REMOVIDA_PELO_USUARIO_RECEBEDOR</code>.',
+        'Melhor ainda: cadastre um <strong>webhook</strong> e o banco avisa você no instante em que o pagamento cai.'
+      ].forEach(function(t){ var li=document.createElement('li'); li.innerHTML=t; ol.appendChild(li); });
+      elPagamento.appendChild(ol);
+      p('<code>CONCLUIDA</code> é a resposta que significa "pago".');
+    }
+  }
+  function escapar(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+  /* ================= abas ================= */
+  var abas=[['aba-texto','p-texto'],['aba-imagem','p-imagem'],['aba-camera','p-camera']];
+  abas.forEach(function(par){
+    $(par[0]).addEventListener('click', function(){
+      abas.forEach(function(o){
+        var sel = o[0]===par[0];
+        $(o[0]).setAttribute('aria-selected', sel?'true':'false');
+        $(o[1]).classList.toggle('ativo', sel);
+      });
+      if(par[0]!=='aba-camera') pararCamera();
+    });
+  });
+
+  /* ================= texto ================= */
+  $('btn-ler').addEventListener('click', function(){ analisar(elEntrada.value); });
+  elEntrada.addEventListener('input', function(){
+    clearTimeout(elEntrada._t);
+    elEntrada._t = setTimeout(function(){ if(elEntrada.value.trim().length>20) analisar(elEntrada.value); }, 300);
+  });
+  $('btn-limpar').addEventListener('click', function(){
+    elEntrada.value=''; elResultado.classList.remove('ativo'); recado(''); elEntrada.focus();
+  });
+  $('btn-exemplo').addEventListener('click', function(){
+    elEntrada.value='00020126360014br.gov.bcb.pix0114+5561962356800520400005303986540510.005802BR5913Fulano de Tal6008BRASILIA62070503***630407FB';
+    analisar(elEntrada.value);
+  });
+
+  /* ================= imagem ================= */
+  var elSolta=$('solta'), elArquivo=$('arquivo');
+  elSolta.addEventListener('click', function(){ elArquivo.click(); });
+  elSolta.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); elArquivo.click(); } });
+  elArquivo.addEventListener('change', function(){ if(elArquivo.files[0]) lerImagem(elArquivo.files[0]); });
+  ['dragenter','dragover'].forEach(function(ev){
+    elSolta.addEventListener(ev, function(e){ e.preventDefault(); elSolta.classList.add('pairando'); });
+  });
+  ['dragleave','drop'].forEach(function(ev){
+    elSolta.addEventListener(ev, function(e){ e.preventDefault(); elSolta.classList.remove('pairando'); });
+  });
+  elSolta.addEventListener('drop', function(e){
+    var f = e.dataTransfer && e.dataTransfer.files[0];
+    if(f) lerImagem(f);
+  });
+  document.addEventListener('paste', function(e){
+    var itens = e.clipboardData && e.clipboardData.items;
+    if(!itens) return;
+    for(var i=0;i<itens.length;i++){
+      if(itens[i].type.indexOf('image')===0){ lerImagem(itens[i].getAsFile()); return; }
+    }
+  });
+
+  function semLeitor(){
+    if(typeof jsQR==='undefined'){
+      recado('A biblioteca de leitura de QR não carregou. Verifique a conexão e recarregue a página — colar o código continua funcionando.','ruim');
+      return true;
+    }
+    return false;
+  }
+
+  function lerImagem(file){
+    if(semLeitor()) return;
+    var url=URL.createObjectURL(file);
+    var img=new Image();
+    img.onload=function(){
+      var lado = Math.min(1400, Math.max(img.width, img.height));
+      var esc = lado/Math.max(img.width,img.height);
+      var cv=document.createElement('canvas');
+      cv.width=Math.round(img.width*esc); cv.height=Math.round(img.height*esc);
+      var ctx=cv.getContext('2d');
+      ctx.drawImage(img,0,0,cv.width,cv.height);
+      var dados=ctx.getImageData(0,0,cv.width,cv.height);
+      var achado = jsQR(dados.data, cv.width, cv.height, {inversionAttempts:'attemptBoth'});
+      URL.revokeObjectURL(url);
+      if(achado && achado.data){
+        elEntrada.value=achado.data;
+        analisar(achado.data);
+      } else {
+        recado('Não encontrei um QR nessa imagem. Tente uma foto mais nítida, cortada em volta do código.','ruim');
+      }
+    };
+    img.onerror=function(){ URL.revokeObjectURL(url); recado('Não consegui abrir esse arquivo como imagem.','ruim'); };
+    img.src=url;
+  }
+
+  /* ================= câmera ================= */
+  var fluxo=null, rodando=false, vid=$('video'), cvCam=document.createElement('canvas');
+  $('btn-camera').addEventListener('click', function(){
+    if(semLeitor()) return;
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      recado('Este navegador não expõe a câmera para a página.','ruim'); return;
+    }
+    navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}).then(function(st){
+      fluxo=st; vid.srcObject=st; vid.style.display='block';
+      $('camera-off').style.display='none';
+      $('btn-camera').disabled=true; $('btn-parar').disabled=false;
+      recado('');
+      return vid.play();
+    }).then(function(){
+      rodando=true; varrerQuadro();
+    }).catch(function(err){
+      var m='Não consegui abrir a câmera.';
+      if(err && (err.name==='NotAllowedError'||err.name==='SecurityError'))
+        m='Permissão de câmera negada. Se a página estiver dentro de outro site, baixe o arquivo e abra direto no navegador.';
+      if(err && err.name==='NotFoundError') m='Nenhuma câmera encontrada neste aparelho.';
+      recado(m,'ruim');
+    });
+  });
+  $('btn-parar').addEventListener('click', pararCamera);
+
+  function pararCamera(){
+    rodando=false;
+    if(fluxo){ fluxo.getTracks().forEach(function(t){t.stop();}); fluxo=null; }
+    vid.style.display='none';
+    var off=$('camera-off'); if(off) off.style.display='block';
+    $('btn-camera').disabled=false; $('btn-parar').disabled=true;
+  }
+
+  function varrerQuadro(){
+    if(!rodando) return;
+    if(vid.readyState===vid.HAVE_ENOUGH_DATA){
+      cvCam.width=vid.videoWidth; cvCam.height=vid.videoHeight;
+      var ctx=cvCam.getContext('2d');
+      ctx.drawImage(vid,0,0,cvCam.width,cvCam.height);
+      try{
+        var d=ctx.getImageData(0,0,cvCam.width,cvCam.height);
+        var achado=jsQR(d.data, cvCam.width, cvCam.height, {inversionAttempts:'dontInvert'});
+        if(achado && achado.data){
+          elEntrada.value=achado.data;
+          analisar(achado.data);
+          pararCamera();
+          return;
+        }
+      }catch(e){}
+    }
+    requestAnimationFrame(varrerQuadro);
+  }
+
+  window.addEventListener('beforeunload', pararCamera);
+})();
+</script>
+</body>
+</html>
